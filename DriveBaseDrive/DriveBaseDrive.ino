@@ -1,12 +1,3 @@
-// 
-// MME 4487 Lab 5 Drive
-// 
-//  Language: Arduino (C++)
-//  Target:   ESP32
-//  Author:   Michael Naish
-//  Date:     2023 10 08 
-//
-
 
 #include <Arduino.h>
 #include <esp_now.h>
@@ -30,8 +21,7 @@ struct ControlDataPacket {
 
 // Drive data packet structure
 struct DriveDataPacket {
-  unsigned long time;                                 // time packet sent
-  bool good;                                          // flag for if the desired object is detected
+  unsigned long time;                                 // time packet sent                                         // flag for if the desired object is detected
 };
 
 // Encoder structure
