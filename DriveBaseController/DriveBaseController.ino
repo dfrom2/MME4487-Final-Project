@@ -107,8 +107,34 @@ void loop() {
   unsigned long curTime = millis();
   if(curTime - lastTime > 10){
     lastTime = curTime;
+    if (!buttonFwd.state) {                           // forward pushbutton pressed
+      if (!buttonLeft.state){                      // left pushbutton pressed
+        controlData.leftDir = 0;
+      } else if (!buttonRight.state){
+        controlData.rightDir=0;
+      } else{
+        controlData.leftDir = 1;
+        controlData.rightDir = 1;
+      }
+    }
+    else if (!buttonRev.state) {                      // reverse pushbutton pressed
+      if (!buttonLeft.state){                      // left pushbutton pressed
+        controlData.leftDir = 0;
+      } else if (!buttonRight.state){
+        controlData.rightDir=0;
+      } else{
+        controlData.leftDir = -1;
+        controlData.rightDir = -1;
+      }
+    }
+    else {                                            // no input, stop
+      controlData.leftDir = 0;
+      controlData.rightDir = 0;
+    }
+      // if drive appears disconnected, update control signal to stop before sending
     if (commsLossCount > cMaxDroppedPackets) {
-      controlData.dir = 0;
+      controlData.leftDir = 0;
+      controlData.rightDir = 0;
     }
     // send control signal to drive
     result = esp_now_send(receiverMacAddress, (uint8_t *) &controlData, sizeof(controlData));
