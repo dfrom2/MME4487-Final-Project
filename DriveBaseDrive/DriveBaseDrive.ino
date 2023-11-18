@@ -201,6 +201,7 @@ void loop() {
       else {
         setMotor(0, 0, cIN1Chan[k], cIN2Chan[k]);     // stop motor
       }
+      //Serial.printf("Direction 1: %d, Direction 2: %d, PWM 1: %d, PWM 2: %d\n",dir[0],dir[1],pwm[0],pwm[1]);
     }
 
     // send data from drive to controller
@@ -266,9 +267,8 @@ void onDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len) {
     return;                                           // return
   }
   memcpy(&inData, incomingData, sizeof(inData));      // store drive data from controller
-#ifdef PRINT_INCOMING
-  Serial.printf("%d, %d, %d\n", inData.leftDir, inData.speed, inData.time);
-#endif
+
+  Serial.printf("%d, %d, %d\n", inData.leftDir, inData.rightDir, inData.time);
 }
 
 // callback function for when data is sent
