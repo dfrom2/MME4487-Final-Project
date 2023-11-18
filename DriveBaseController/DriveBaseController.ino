@@ -9,7 +9,7 @@ void ARDUINO_ISR_ATTR buttonISR(void* arg);
 void onDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len);
 void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t status);
 
-struct Button{
+struct Button{                                        // button structure
   const int pin;
   unsigned int numberPresses;
   unsigned int lastPressTime;
@@ -19,8 +19,8 @@ struct Button{
 };
 
 struct ControlDataPacket {
-  int leftDir;                                            // drive direction: 1 = forward, -1 = reverse, 0 = stop
-  int rightDir;
+  int leftDir;                                        // drive direction: -1 = forward, 1 = reverse, 0 = stop
+  int rightDir;                                       // right drive direction 1 = forward, -1 = reverse, 0 = stop
   unsigned long time;                                 // time packet sent
 };
 
@@ -34,9 +34,11 @@ const int cHeartbeatInterval = 500;
 const long cDebounceDelay = 50;
 const int cMaxDroppedPackets = 20;                    // maximum number of packets allowed to drop
 
-unsigned long lastHeartbeat = 0;
-unsigned long lastTime = 0;
+unsigned long lastHeartbeat = 0;                      // time since last heartbeat
+unsigned long lastTime = 0;                           // time since last cycle
 unsigned int commsLossCount = 0;                      // number of sequential sent packets have dropped
+
+//defining buttons
 Button buttonFwd = {14, 0, 0, false, true, true};
 Button buttonRev = {13, 0, 0, false, true, true};
 Button buttonLeft = {27, 0, 0, false, true, true};
@@ -56,9 +58,11 @@ void setup() {
   Serial.print("MAC address ");
   Serial.println(WiFi.macAddress());                  // print MAC address of ESP32
   WiFi.disconnect(); 
+  
+  pinMode(cHeartbeatLED, OUTPUT);                     // configuring GPIO for the heartbeat LED
+  pinMode(cStatusLED, OUTPUT);                        // configuring GPIO for the status LED
 
-  pinMode(cHeartbeatLED, OUTPUT);
-  pinMode(cStatusLED, OUTPUT);
+  // configuring GPIO for all buttons
   pinMode(buttonFwd.pin, INPUT_PULLUP);
   attachInterruptArg(buttonFwd.pin, buttonISR, &buttonFwd, CHANGE);
   pinMode(buttonRev.pin, INPUT_PULLUP);
@@ -109,21 +113,21 @@ void loop() {
   if(curTime - lastTime > 10){
     lastTime = curTime;
     if (!buttonFwd.state) {                           // forward pushbutton pressed
-      if (!buttonLeft.state){                      // left pushbutton pressed
-        controlData.leftDir = 0;
-      } else if (!buttonRight.state){
-        controlData.rightDir=0;
-      } else{
+      if (!buttonLeft.state){                         // left pushbutton pressed turn robot left
+        controlData.leftDir = 0;  
+      } else if (!buttonRight.state){                 // right pushbutton pressed turn robot right
+        controlData.rightDir=0;                    
+      } else{                                         // if neither button is pressed move robot forwards
         controlData.leftDir = -1;
         controlData.rightDir = 1;
       }
     }
-    else if (!buttonRev.state) {                      // reverse pushbutton pressed
-      if (!buttonLeft.state){                      // left pushbutton pressed
+    else if (!buttonRev.state) {                       // reverse pushbutton pressed
+      if (!buttonLeft.state){                          // left pushbutton pressed turn robot left
         controlData.leftDir = 0;
-      } else if (!buttonRight.state){
+      } else if (!buttonRight.state){                  // right pushbutton pressed turn robot right
         controlData.rightDir=0;
-      } else{
+      } else{                                          // if neither button is pressed move robot backwards
         controlData.leftDir = 1;
         controlData.rightDir = -1;
       }
