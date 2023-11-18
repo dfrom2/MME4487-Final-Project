@@ -1,4 +1,5 @@
 
+
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_now.h>
@@ -44,7 +45,7 @@ Button buttonPickup = {25, 0, 0, false, true, true};
 Button buttonDrop = {33, 0, 0, false, true, true};
 
 // REPLACE WITH MAC ADDRESS OF YOUR DRIVE ESP32
-uint8_t receiverMacAddress[] = {0xA8,0x42,0xE3,0xCA,0xF1,0xBC};  // MAC address of drive 00:01:02:03:04:05 
+uint8_t receiverMacAddress[] = {0x08,0xD1,0xF9,0x98,0x99,0xB8};  // MAC address of drive 00:01:02:03:04:05 
 esp_now_peer_info_t peerInfo = {};                    // ESP-NOW peer information
 ControlDataPacket controlData;                        // data packet to send to drive system
 DriveDataPacket inData;                               // data packet from drive system
@@ -113,7 +114,7 @@ void loop() {
       } else if (!buttonRight.state){
         controlData.rightDir=0;
       } else{
-        controlData.leftDir = 1;
+        controlData.leftDir = -1;
         controlData.rightDir = 1;
       }
     }
@@ -123,7 +124,7 @@ void loop() {
       } else if (!buttonRight.state){
         controlData.rightDir=0;
       } else{
-        controlData.leftDir = -1;
+        controlData.leftDir = 1;
         controlData.rightDir = -1;
       }
     }
