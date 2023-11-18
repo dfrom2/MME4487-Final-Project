@@ -14,14 +14,14 @@ void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t status);
 
 // Control data packet structure
 struct ControlDataPacket {
-  int leftDir;                                            // left drive direction: 1 = forward, -1 = reverse, 0 = stop
-  int rightDir;                                            // right drive direction: 1 = forward, -1 = reverse, 0 = stop
+  int leftDir;                                        // left drive direction: -1 = forward, 1 = reverse, 0 = stop
+  int rightDir;                                       // right drive direction: 1 = forward, -1 = reverse, 0 = stop
   unsigned long time;                                 // time packet sent
 };
 
 // Drive data packet structure
 struct DriveDataPacket {
-  unsigned long time;                                 // time packet sent                                         // flag for if the desired object is detected
+  unsigned long time;                                 // time packet sent                                         
 };
 
 // Encoder structure
@@ -214,8 +214,6 @@ void loop() {
     }
   }
 
-  
-  
   doHeartbeat();                                      // update heartbeat LED
 }
 
