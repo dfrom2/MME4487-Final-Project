@@ -22,6 +22,8 @@ struct ControlDataPacket {
   int leftDir;                                        // drive direction: -1 = forward, 1 = reverse, 0 = stop
   int rightDir;                                       // right drive direction 1 = forward, -1 = reverse, 0 = stop
   unsigned long time;                                 // time packet sent
+  int sortButton;
+  int gateButton;
 };
 
 struct DriveDataPacket {
