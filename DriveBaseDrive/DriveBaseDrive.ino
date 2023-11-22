@@ -4,6 +4,7 @@
 #include <WiFi.h>
 #include <Wire.h>
 #include <SPI.h>
+#include "Adafruit_TCS34725.h"
 
 // Function declarations
 void doHeartbeat();
@@ -17,6 +18,8 @@ struct ControlDataPacket {
   int leftDir;                                        // left drive direction: -1 = forward, 1 = reverse, 0 = stop
   int rightDir;                                       // right drive direction: 1 = forward, -1 = reverse, 0 = stop
   unsigned long time;                                 // time packet sent
+  int sortButton;                                     // the button we activate the sorting with
+  int gateButton;                                     // the button we use to open the gate door
 };
 
 // Drive data packet structure
@@ -51,6 +54,10 @@ const int cMaxDroppedPackets = 20;                    // maximum number of packe
 const float kp = 1.5;                                 // proportional gain for PID
 const float ki = 0.2;                                 // integral gain for PID
 const float kd = 0.8;                                 // derivative gain for PID
+const int cTCSLED = 23;                               // GPIO pin for LED on TCS34725
+const int servoGate = 0;                              // servo that rotates for the gate
+const int servoBucket = 0;                            // servo that rotates for the bucket
+const int servoBoom = 0;                              // servo that rotates for the boom
 
 // Variables
 unsigned long lastHeartbeat = 0;                      // time of last heartbeat state change
@@ -64,6 +71,9 @@ float targetF[] = {0.0, 0.0};                         // target for motor as flo
 ControlDataPacket inData;                             // control data packet from controller
 DriveDataPacket driveData;                            // data packet to send controller
 
+// TCS34725 colour sensor with 2.4 ms integration time and gain of 4
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_2_4MS, TCS34725_GAIN_4X);
+bool tcsFlag = 0;                                     // TCS34725 flag: 1 = connected; 0 = not found
 
 // REPLACE WITH MAC ADDRESS OF YOUR CONTROLLER ESP32
 uint8_t receiverMacAddress[] = {0x08,0xD1,0xF9,0x98,0x99,0xB8};  // MAC address of controller 00:01:02:03:04:05
@@ -79,7 +89,20 @@ void setup() {
   pinMode(cHeartbeatLED, OUTPUT);                     // configure built-in LED for heartbeat
   pinMode(cStatusLED, OUTPUT);                        // configure GPIO for communication status LED as output
 
+// setup for the colour sensor
+  pinMode(cTCSLED, OUTPUT);                           // configure GPIO for control of LED on TCS34725
 
+    // Connect to TCS34725 colour sensor
+  if (tcs.begin()) {
+    Serial.printf("Found TCS34725 colour sensor\n");
+    tcsFlag = true;
+    digitalWrite(cTCSLED, 1);                         // turn on onboard LED 
+  } 
+  else {
+    Serial.printf("No TCS34725 found ... check your connections\n");
+    tcsFlag = false;
+  }
+  
   // setup motors with encoders
   for (int k = 0; k < cNumMotors; k++) {
     ledcAttachPin(cIN1Pin[k], cIN1Chan[k]);           // attach INT1 GPIO to PWM channel
@@ -138,12 +161,37 @@ void loop() {
   int pwm[] = {0, 0};                                 // motor speed(s), represented in bit resolution
   int dir[] = {1, 1};                                 // direction that motor should turn
 
+ // if (sortButton){
+      // if (rgb values match){
+          //rotate servo bucket
+     // }
+      // if (rgb values do not match){
+          //rotate servo forward (dump it)  
+      //}
+  // } else{keep in default orientation}
+
+  // if (gateButton){
+    // rotate gate servo to open door
+  //}
+  
   // if too many sequential packets have dropped, assume loss of controller, restart as safety measure
   if (commsLossCount > cMaxDroppedPackets) {
     delay(1000);                                      // okay to block here as nothing else should be happening
     ESP.restart();                                    // restart ESP32
   }
+ //if (tcsFlag) {                                      // if colour sensor initialized
+    //tcs.getRawData(&r, &g, &b, &c);                   // get raw RGBC values
+//#ifdef PRINT_COLOUR            
+     // Serial.printf("R: %d, G: %d, B: %d, C %d\n", r, g, b, c);
+//#endif
+  }
 
+ // if((r > 10&&r<20)&&(g>35&&g<45)&&(b>40&&b<50)){   // checking to see if the colour of the desired object is detected
+   // driveData.good = true;
+  //} else {
+    //driveData.good = false;
+  //}
+  
 #ifdef PRINT_OUTGOING
   Serial.printf("Good: %d\n", driveData.good);
 #endif
