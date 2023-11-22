@@ -1,5 +1,3 @@
-
-
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_now.h>
@@ -24,6 +22,9 @@ struct ControlDataPacket {
   unsigned long time;                                 // time packet sent
   int sortButton;
   int gateButton;
+  int boomPos;
+  int bucketPos;
+  int gatePos;
 };
 
 struct DriveDataPacket {
@@ -45,8 +46,8 @@ Button buttonFwd = {14, 0, 0, false, true, true};
 Button buttonRev = {13, 0, 0, false, true, true};
 Button buttonLeft = {27, 0, 0, false, true, true};
 Button buttonRight = {12, 0, 0, false, true, true};
-Button buttonPickup = {25, 0, 0, false, true, true};
-Button buttonDrop = {33, 0, 0, false, true, true};
+Button buttonSort = {25, 0, 0, false, true, true};
+Button buttonGate = {33, 0, 0, false, true, true};
 
 // REPLACE WITH MAC ADDRESS OF YOUR DRIVE ESP32
 uint8_t receiverMacAddress[] = {0x08,0xD1,0xF9,0x98,0x99,0xB8};  // MAC address of drive 00:01:02:03:04:05 
@@ -73,10 +74,10 @@ void setup() {
   attachInterruptArg(buttonLeft.pin, buttonISR, &buttonLeft, CHANGE);
   pinMode(buttonRight.pin, INPUT_PULLUP);
   attachInterruptArg(buttonRight.pin, buttonISR, &buttonRight, CHANGE);
-  pinMode(buttonPickup.pin, INPUT_PULLUP);
-  attachInterruptArg(buttonPickup.pin, buttonISR, &buttonPickup, CHANGE);
-  pinMode(buttonDrop.pin, INPUT_PULLUP);
-  attachInterruptArg(buttonDrop.pin, buttonISR, &buttonDrop, CHANGE);
+  pinMode(buttonSort.pin, INPUT_PULLUP);
+  attachInterruptArg(buttonSort.pin, buttonISR, &buttonSort, CHANGE);
+  pinMode(buttonGate.pin, INPUT_PULLUP);
+  attachInterruptArg(buttonGate.pin, buttonISR, &buttonGate, CHANGE);
 
    if (esp_now_init() != ESP_OK) 
   {
@@ -138,6 +139,15 @@ void loop() {
       controlData.leftDir = 0;
       controlData.rightDir = 0;
     }
+    if(!buttonSort.state){ //DEFAULT
+      controlData.boomPos = 45; //CORRECT Value!!!!!!!!
+      controlData.bucketPos = 90; //CORRECT Value!!!!!!
+    }
+    if(buttonSort.state){ //DOWN for COLLECTION
+      controlData.boomPos = 45; //CORRECT Value!!!!!!!!
+      controlData.bucketPos = 90; //CORRECT Value!!!!!!
+    }
+
       // if drive appears disconnected, update control signal to stop before sending
     if (commsLossCount > cMaxDroppedPackets) {
       controlData.leftDir = 0;
