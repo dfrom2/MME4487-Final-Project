@@ -1,3 +1,7 @@
+//MME4487 Robot Design Project
+//Daniel From
+//Cole Russell
+//Sherif Elmaghraby
 
 #include <Arduino.h>
 #include <esp_now.h>
