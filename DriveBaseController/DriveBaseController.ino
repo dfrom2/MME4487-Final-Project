@@ -145,12 +145,14 @@ void loop() {
       controlData.rightDir = 0;
     }
     if(!buttonSort.state){ //DEFAULT
-      controlData.boomPos = 45; //CORRECT Value!!!!!!!!
-      controlData.bucketPos = 90; //CORRECT Value!!!!!!
+      controlData.boomPos = 45; //CORRECT Value!!!!!!!! this is the position that we want the boom to be at by default TRIAL AND ERROR
+      delay(2000); // a slight delay to prevent the servos from moving at the same time so that it can move without difficulty
+      controlData.bucketPos = 90; //CORRECT Value!!!!!! this is the position that we want the bucket to be at by default TRIAL AND ERROR
     }
     if(buttonSort.state){ //DOWN for COLLECTION
-      controlData.boomPos = 45; //CORRECT Value!!!!!!!!
-      controlData.bucketPos = 90; //CORRECT Value!!!!!!
+      controlData.boomPos = 45; //CORRECT Value!!!!!!!! this is the angle which we will get with trial and error that drops the rock into the holding tank
+      delay(2000); a slight delay to prevent the servos from moving at the same time so that it can move without difficulty
+      controlData.bucketPos = 90; //CORRECT Value!!!!!! this is the angle which we will get with trial and error that drops the rock into the holding tank
     }
 
       // if drive appears disconnected, update control signal to stop before sending
