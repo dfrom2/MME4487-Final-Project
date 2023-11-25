@@ -3,6 +3,9 @@
 //Cole Russell
 //Sherif Elmaghraby
 
+#define PRINT_COLOUR
+#include "Adafruit_TCS34725.h"
+
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_now.h>
@@ -11,6 +14,7 @@ void doHeartbeat();
 void ARDUINO_ISR_ATTR buttonISR(void* arg);
 void onDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len);
 void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t status);
+long degreesToDutyCycle(int deg);
 
 struct Button{                                        // button structure
   const int pin;
@@ -25,11 +29,8 @@ struct ControlDataPacket {
   int leftDir;                                        // drive direction: -1 = forward, 1 = reverse, 0 = stop
   int rightDir;                                       // right drive direction 1 = forward, -1 = reverse, 0 = stop
   unsigned long time;                                 // time packet sent
-  int sortButton;
-  int gateButton;
-  int boomPos;
-  int bucketPos;
-  int gatePos;
+  int pickup;
+  int dump;
 };
 
 struct DriveDataPacket {
@@ -59,6 +60,9 @@ uint8_t receiverMacAddress[] = {0x08,0xD1,0xF9,0x98,0x99,0xB8};  // MAC address 
 esp_now_peer_info_t peerInfo = {};                    // ESP-NOW peer information
 ControlDataPacket controlData;                        // data packet to send to drive system
 DriveDataPacket inData;                               // data packet from drive system
+
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_2_4MS, TCS34725_GAIN_4X);
+bool tcsFlag = 0;                                     // TCS34725 flag: 1 = connected; 0 = not found
 
 void setup() {
   Serial.begin(115200);
@@ -127,7 +131,7 @@ void loop() {
         controlData.rightDir=0;                    
       } else{                                         // if neither button is pressed move robot forwards
         controlData.leftDir = -1;
-        controlData.rightDir = 1;
+        controlData.rightDir = -1;
       }
     }
     else if (!buttonRev.state) {                       // reverse pushbutton pressed
@@ -137,22 +141,26 @@ void loop() {
         controlData.rightDir=0;
       } else{                                          // if neither button is pressed move robot backwards
         controlData.leftDir = 1;
-        controlData.rightDir = -1;
+        controlData.rightDir = 1;
       }
     }
     else {                                            // no input, stop
       controlData.leftDir = 0;
       controlData.rightDir = 0;
     }
-    if(!buttonSort.state){ //DEFAULT
-      controlData.boomPos = 45; //CORRECT Value!!!!!!!! this is the position that we want the boom to be at by default TRIAL AND ERROR
-      delay(2000); // a slight delay to prevent the servos from moving at the same time so that it can move without difficulty
-      controlData.bucketPos = 90; //CORRECT Value!!!!!! this is the position that we want the bucket to be at by default TRIAL AND ERROR
+    //automated pick and sort code
+    if(!buttonSort.state){ 
+      controlData.pickup = HIGH;
     }
-    if(buttonSort.state){ //DOWN for COLLECTION
-      controlData.boomPos = 45; //CORRECT Value!!!!!!!! this is the angle which we will get with trial and error that drops the rock into the holding tank
-      delay(2000); a slight delay to prevent the servos from moving at the same time so that it can move without difficulty
-      controlData.bucketPos = 90; //CORRECT Value!!!!!! this is the angle which we will get with trial and error that drops the rock into the holding tank
+    else{
+      controlData.pickup = LOW;
+    }
+    //dumping object code
+    if(!buttonGate.state){
+      controlData.dump = HIGH;
+    }
+    else{
+      controlData.dump = LOW;
     }
 
       // if drive appears disconnected, update control signal to stop before sending
@@ -169,6 +177,7 @@ void loop() {
       digitalWrite(cStatusLED, 1);                    // turn on communication status LED
     }
   }
+  
   doHeartbeat();
 }
 
@@ -221,3 +230,4 @@ void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
     commsLossCount = 0;                               // reset communication loss counter
   }
 }
+
