@@ -22,15 +22,13 @@ struct ControlDataPacket {
   int leftDir;                                        // left drive direction: -1 = forward, 1 = reverse, 0 = stop
   int rightDir;                                       // right drive direction: 1 = forward, -1 = reverse, 0 = stop
   unsigned long time;                                 // time packet sent
-  int boomPos;                                        // boom servo position
-  int bucketPos;                                      // bucket servo position
-  int gatePos;                                        // gate servo position
+  int pickup;
+  int dump;
 };
 
 // Drive data packet structure
 struct DriveDataPacket {
-  unsigned long time;                                 // time packet sent   
-  bool good;                                          // object detection                                      
+  unsigned long time;                                 // time packet sent                                     
 };
 
 // Encoder structure
@@ -62,10 +60,12 @@ const float ki = 0.2;                                 // integral gain for PID
 const float kd = 0.8;                                 // derivative gain for PID
 
 //constants for sorting components
-const int cboomServo = 34;                            // GPIO pin for boom Servo. CHANGE TO CORRECT VALUE!!!
-const int cbucketServo = 26;                          // GPIO pin for bucket Servo. CHANGE TO CORRECT VALUE!!!
-const int cgateServo = 14;                            // GPIO pin for gate Servo. CHANGE TO CORRECT VALUE!!!
-const int cservoChannel = 5;                          // PWM channel used for servo motors
+const int cboomServo = 14;                            // GPIO pin for boom Servo. CHANGE TO CORRECT VALUE!!!
+const int cbucketServo = 27;                          // GPIO pin for bucket Servo. CHANGE TO CORRECT VALUE!!!
+const int cgateServo = 12;                            // GPIO pin for gate Servo. CHANGE TO CORRECT VALUE!!!
+const int cBoServoChannel = 5;                        // PWM channel used for Boom Servo
+const int cBuServoChannel = 6;                        // PWM channel used for Bucket Servo
+const int cGServoChannel = 3;                         // PWM channel used for Gate Servo      
 
 const int cTCSLED = 23;                               // GPIO pin for LED on TCS34725
 
@@ -81,13 +81,17 @@ float targetF[] = {0.0, 0.0};                         // target for motor as flo
 ControlDataPacket inData;                             // control data packet from controller
 DriveDataPacket driveData;                            // data packet to send controller
 
-int i_boomVal;                                        // desired servo angle for boom
-int i_bucketVal;                                      // desired servo angle for bucket
+int i_boomVal = 0;                                        // desired servo angle for boom
+int i_bucketVal = 0;                                      // desired servo angle for bucket
 int i_gateVal;                                        // desired servo angle for gate
 
+int pickupState = 0;
+int wait;
+
+bool good; 
 
 // REPLACE WITH MAC ADDRESS OF YOUR CONTROLLER ESP32
-uint8_t receiverMacAddress[] = {0x08,0xD1,0xF9,0x98,0x99,0xB8};  // MAC address of controller 00:01:02:03:04:05
+uint8_t receiverMacAddress[] = {0xA8,0x42,0xE3,0xCA,0xF1,0xBC};  // MAC address of controller A8:42:E3:CA:F1:BC
 esp_now_peer_info_t peerInfo = {};                    // ESP-NOW peer information
 
 // TCS34725 colour sensor with 2.4 ms integration time and gain of 4
@@ -104,11 +108,12 @@ void setup() {
   
   pinMode(cHeartbeatLED, OUTPUT);                     // configure built-in LED for heartbeat
   pinMode(cStatusLED, OUTPUT);                        // configure GPIO for communication status LED as output
-  ledcAttachPin(cboomServo, cservoChannel);           // assign boom servo pin to servo channel
-  ledcAttachPin(cbucketServo, cservoChannel);         // assign bucket servo pin to servo channel
-  ledcAttachPin(cgateServo, cservoChannel);           // assign gate servo pin to servo channel
-  ledcSetup(cservoChannel, 50, 16);                   // setup channel for 50Hz and 16-bit resolution
-
+  ledcAttachPin(cboomServo, cBoServoChannel);           // assign boom servo pin to servo channel
+  ledcAttachPin(cbucketServo, cBuServoChannel);         // assign bucket servo pin to servo channel
+  ledcAttachPin(cgateServo, cGServoChannel);           // assign gate servo pin to servo channel
+  ledcSetup(cBoServoChannel, 50, 16);                   // setup channel for 50Hz and 16-bit resolution
+  ledcSetup(cBuServoChannel, 50, 16);                   // setup channel for 50Hz and 16-bit resolution
+  ledcSetup(cGServoChannel, 50, 16);                   // setup channel for 50Hz and 16-bit resolution
   pinMode(cTCSLED, OUTPUT);                           // configure GPIO for control of LED on TCS34725
 
 
@@ -190,40 +195,20 @@ void loop() {
 
   if(tcsFlag){                                        // if colour sensor initialized
     tcs.getRawData(&r, &g, &b, &c);                   // get raw RGBC values
-#ifdef PRINT_COLOUR
+
     Serial.printf("R: %d, G: %d, B: %d, C: %d\n", r, g, b, c);
-#endif
+
   }
 
-  if(r == 11 && g == 5 && b == 5){                  // if desired colour currently set for red
-    driveData.good = HIGH;                          // boolean value is true
-  }
-  else{
-    driveData.good = LOW;                           // else boolean value is false
-  }
+   if((r==3) && (g>=3&&g<=4) && (b>=0&&b<=2)&&(c>=5&&c<=15)){                  // if desired colour currently set for red
+     good = HIGH;                          // boolean value is true
+   }
+   else{
+     good = LOW;                           // else boolean value is false
+   }
 
-#ifdef PRINT_OUTGOING
-  Serial.printf("Good: %d\n", driveData.good);
-#endif
-
-/*set servos to inital position
-      delay(6000);                                    //delay so there is time to pick up object before servos move 
-      ledcWrite(cservoChannel, inData.boomPos);
-      ledcWrite(cservoChanenl, inData.bucketPos);
-      ledcWrite(cservoChannel, inData.gatePos);
-*/
-  i_boomVal = 45;                                 // set boom to resting position at 45 deg (subject to change)
-  i_bucketVal = 45;                               // set bucket to resting positon at 45 deg (subject to change)
-  i_gateVal = 45;                                 // set gate to resting position at 45 deg (subject to change)
-
-  if(driveData.good == HIGH){                       // store desired object in bed
-    i_boomVal = 100;                                // move boom to vertical at 100 deg (subject to change)
-    delay(1000);
-    i_bucketVal = 100;                              // move bucket to dump object at 100 deg (subject to change)
-  }
-  else{                                             // dump undesired object at 20 deg (subject to change)
-    i_bucketVal = 20;
-  }
+  
+    
 
   // store encoder positions to avoid conflicts with ISR updates
   noInterrupts();                                     // disable interrupts temporarily while reading
@@ -231,12 +216,71 @@ void loop() {
     pos[k] = encoder[k].pos;                          // read and store current motor position
   }
   interrupts();                                       // turn interrupts back on
-
+  
   unsigned long curTime = micros();                   // capture current time in microseconds
   if (curTime - lastTime > 10000) {                   // wait ~10 ms
     deltaT = ((float) (curTime - lastTime)) / 1.0e6;  // compute actual time interval in seconds
     lastTime = curTime;                               // update start time for next control cycle
     driveData.time = curTime;                         // update transmission time
+    
+  if(inData.pickup){
+    pickupState = 1;
+  }    
+
+        if(pickupState==0){
+          i_bucketVal = 88;
+          i_boomVal = 180;
+        }
+          
+       if(pickupState==1){
+          if(i_boomVal>120){
+            i_boomVal--;
+          } else {
+            wait = 0;
+            pickupState = 2;
+          }
+       }
+
+        if(pickupState==2){
+          wait++;
+          if(wait>300){
+            if(good){
+              pickupState = 3;
+            } else {
+              if(i_bucketVal < 180) {
+                i_bucketVal++;
+              } else {
+                pickupState = 0;
+              }
+            } 
+          }
+        }
+          
+        if(pickupState==3){
+          if(i_boomVal>-20){
+            i_boomVal--;
+          }
+          if(i_bucketVal< 180){
+            i_bucketVal++;
+          }
+          if(i_boomVal <= -20 && i_bucketVal >= 180){
+            pickupState = 4;
+          }
+        }
+          
+        if(pickupState==4){
+          if(i_bucketVal > 88){
+            i_bucketVal--;
+          } else {
+            pickupState = 0;
+          }
+        }
+          
+    //Serial.printf("pickupState: %d, bucket pos: %d, boom pos: %d, good: %d\n", pickupState, i_bucketVal, i_boomVal, good);
+    ledcWrite(cBoServoChannel, degreesToDutyCycle(i_boomVal));
+    ledcWrite(cBuServoChannel, degreesToDutyCycle(i_bucketVal));
+
+
     for (int k = 0; k < cNumMotors; k++) {
       velEncoder[k] = ((float) pos[k] - (float) lastEncoder[k]) / deltaT; // calculate velocity in counts/sec
       lastEncoder[k] = pos[k];                        // store encoder count for next control cycle
@@ -278,6 +322,7 @@ void loop() {
       else {
         setMotor(0, 0, cIN1Chan[k], cIN2Chan[k]);     // stop motor
       }
+    
       //Serial.printf("Direction 1: %d, Direction 2: %d, PWM 1: %d, PWM 2: %d\n",dir[0],dir[1],pwm[0],pwm[1]);
     } 
 
@@ -343,7 +388,7 @@ void onDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len) {
   }
   memcpy(&inData, incomingData, sizeof(inData));      // store drive data from controller
 
-  Serial.printf("%d, %d, %d\n", inData.leftDir, inData.rightDir, inData.time);
+  //Serial.printf("%d, %d, %d\n", inData.leftDir, inData.rightDir, inData.time);
 }
 
 // callback function for when data is sent
@@ -358,4 +403,18 @@ void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
   else {
     commsLossCount = 0;                               // reset communication loss counter
   }
+}
+
+long degreesToDutyCycle(int deg) {
+  const long cl_MinDutyCycle = 1650;                 // duty cycle for 0 degrees
+  const long cl_MaxDutyCycle = 8175;                 // duty cycle for 180 degrees
+
+  long l_DutyCycle = map(deg, 0, 180, cl_MinDutyCycle, cl_MaxDutyCycle);  // convert to duty cycle
+
+#ifdef OUTPUT_ON
+  float f_Percent = l_DutyCycle * 0.0015259;         // dutyCycle / 65535 * 100
+  
+#endif
+
+  return l_DutyCycle;
 }
