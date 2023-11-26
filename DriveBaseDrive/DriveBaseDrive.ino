@@ -44,7 +44,7 @@ const int cStatusLED = 13;                            // GPIO pin of communicati
 const int cHeartbeatInterval = 500;                   // heartbeat blink interval, in milliseconds
 const int cNumMotors = 2;                             // Number of DC motors
 const int cIN1Pin[] = {17, 19};                       // GPIO pin(s) for INT1
-const int cIN1Chan[] = {0, 1};                        // PWM channe(s) for INT1
+const int cIN1Chan[] = {0, 1};                        // PWM channel(s) for INT1
 const int c2IN2Pin[] = {16, 18};                      // GPIO pin(s) for INT2
 const int cIN2Chan[] = {2, 3};                        // PWM channel(s) for INT2
 const int cPWMRes = 8;                                // bit resolution for PWM
@@ -81,14 +81,13 @@ float targetF[] = {0.0, 0.0};                         // target for motor as flo
 ControlDataPacket inData;                             // control data packet from controller
 DriveDataPacket driveData;                            // data packet to send controller
 
-int i_boomVal = 0;                                        // desired servo angle for boom
-int i_bucketVal = 0;                                      // desired servo angle for bucket
+int i_boomVal = 0;                                    // desired servo angle for boom
+int i_bucketVal = 0;                                  // desired servo angle for bucket
 int i_gateVal;                                        // desired servo angle for gate
 
-int pickupState = 0;
-int wait;
-
-bool good; 
+int pickupState = 0;                                  // current state of the sorting loop
+int wait;                                             // delay used for sorting loop
+bool good;                                            // flag for checking for desired item
 
 // REPLACE WITH MAC ADDRESS OF YOUR CONTROLLER ESP32
 uint8_t receiverMacAddress[] = {0xA8,0x42,0xE3,0xCA,0xF1,0xBC};  // MAC address of controller A8:42:E3:CA:F1:BC
@@ -108,12 +107,12 @@ void setup() {
   
   pinMode(cHeartbeatLED, OUTPUT);                     // configure built-in LED for heartbeat
   pinMode(cStatusLED, OUTPUT);                        // configure GPIO for communication status LED as output
-  ledcAttachPin(cboomServo, cBoServoChannel);           // assign boom servo pin to servo channel
-  ledcAttachPin(cbucketServo, cBuServoChannel);         // assign bucket servo pin to servo channel
-  ledcAttachPin(cgateServo, cGServoChannel);           // assign gate servo pin to servo channel
-  ledcSetup(cBoServoChannel, 50, 16);                   // setup channel for 50Hz and 16-bit resolution
-  ledcSetup(cBuServoChannel, 50, 16);                   // setup channel for 50Hz and 16-bit resolution
-  ledcSetup(cGServoChannel, 50, 16);                   // setup channel for 50Hz and 16-bit resolution
+  ledcAttachPin(cboomServo, cBoServoChannel);         // assign boom servo pin to servo channel
+  ledcAttachPin(cbucketServo, cBuServoChannel);       // assign bucket servo pin to servo channel
+  ledcAttachPin(cgateServo, cGServoChannel);          // assign gate servo pin to servo channel
+  ledcSetup(cBoServoChannel, 50, 16);                 // setup channel for 50Hz and 16-bit resolution
+  ledcSetup(cBuServoChannel, 50, 16);                 // setup channel for 50Hz and 16-bit resolution
+  ledcSetup(cGServoChannel, 50, 16);                  // setup channel for 50Hz and 16-bit resolution
   pinMode(cTCSLED, OUTPUT);                           // configure GPIO for control of LED on TCS34725
 
 
@@ -200,7 +199,7 @@ void loop() {
 
   }
 
-   if((r==3) && (g>=3&&g<=4) && (b>=0&&b<=2)&&(c>=5&&c<=15)){                  // if desired colour currently set for red
+   if((r==3) && (g>=3&&g<=4) && (b>=0&&b<=2)&&(c>=5&&c<=15)){                  // colour is set to the small green rocks
      good = HIGH;                          // boolean value is true
    }
    else{
@@ -223,30 +222,29 @@ void loop() {
     lastTime = curTime;                               // update start time for next control cycle
     driveData.time = curTime;                         // update transmission time
     
-  if(inData.pickup){
-    pickupState = 1;
-  }    
-
-        if(pickupState==0){
+  if(inData.pickup){                                  // if the sorting button is pressed on the controller
+    pickupState = 1;                                  // start the pickup sequence
+  }  
+        if(pickupState==0){                           // if the pickup sequence is not active, hold the servos in place
           i_bucketVal = 88;
           i_boomVal = 180;
         }
           
-       if(pickupState==1){
-          if(i_boomVal>120){
+       if(pickupState==1){                            // if sorting sequence is at stage 1, raise boom slightly to move object towards colour sensor
+          if(i_boomVal>120){                          // if the boom position is greater than the desired position, move the boom until it reaches the desired position
             i_boomVal--;
           } else {
-            wait = 0;
-            pickupState = 2;
+            wait = 0;                                 // set the delay variable to 0
+            pickupState = 2;                          // change to next pickup state
           }
        }
 
-        if(pickupState==2){
+        if(pickupState==2){                           // wait 300 cycles to allow the colour sensor to read the value of the object
           wait++;
           if(wait>300){
-            if(good){
-              pickupState = 3;
-            } else {
+            if(good){                                 // if desired object, move to the next stage in the sorting sequence
+              pickupState = 3;  
+            } else {                                  // else, drop the object and reset the sorting sequence                      
               if(i_bucketVal < 180) {
                 i_bucketVal++;
               } else {
@@ -255,8 +253,8 @@ void loop() {
             } 
           }
         }
-          
-        if(pickupState==3){
+            
+        if(pickupState==3){                          // move bucket and boom until its above the storage box
           if(i_boomVal>-20){
             i_boomVal--;
           }
@@ -264,21 +262,19 @@ void loop() {
             i_bucketVal++;
           }
           if(i_boomVal <= -20 && i_bucketVal >= 180){
-            pickupState = 4;
+            pickupState = 4;                        // switch to the next stage in the sorting sequence
           }
         }
           
-        if(pickupState==4){
+        if(pickupState==4){                         // drop the object into the storage box
           if(i_bucketVal > 88){
             i_bucketVal--;
           } else {
-            pickupState = 0;
+            pickupState = 0;                       // reset the sorting sequence
           }
         }
-          
-    //Serial.printf("pickupState: %d, bucket pos: %d, boom pos: %d, good: %d\n", pickupState, i_bucketVal, i_boomVal, good);
-    ledcWrite(cBoServoChannel, degreesToDutyCycle(i_boomVal));
-    ledcWrite(cBuServoChannel, degreesToDutyCycle(i_bucketVal));
+    ledcWrite(cBoServoChannel, degreesToDutyCycle(i_boomVal));    //setting the position of the boom
+    ledcWrite(cBuServoChannel, degreesToDutyCycle(i_bucketVal));  // setting the position of the bucket
 
 
     for (int k = 0; k < cNumMotors; k++) {
@@ -405,6 +401,7 @@ void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
   }
 }
 
+//changing a degree input into a duty cycle usable by the servos
 long degreesToDutyCycle(int deg) {
   const long cl_MinDutyCycle = 1650;                 // duty cycle for 0 degrees
   const long cl_MaxDutyCycle = 8175;                 // duty cycle for 180 degrees
