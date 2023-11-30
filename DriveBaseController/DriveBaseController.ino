@@ -126,9 +126,9 @@ void loop() {
     lastTime = curTime;
     if (!buttonFwd.state) {                           // forward pushbutton pressed
       if (!buttonLeft.state){                         // left pushbutton pressed turn robot left
-        controlData.leftDir = 0;  
+        controlData.rightDir = 0;  
       } else if (!buttonRight.state){                 // right pushbutton pressed turn robot right
-        controlData.rightDir=0;                    
+        controlData.leftDir=0;                    
       } else{                                         // if neither button is pressed move robot forwards
         controlData.leftDir = -1;
         controlData.rightDir = -1;
@@ -143,7 +143,15 @@ void loop() {
         controlData.leftDir = 1;
         controlData.rightDir = 1;
       }
-    }
+    } else if(!buttonRight.state&&buttonFwd.state&&buttonRev.state){  //if only right button is pressed, turn right on the spot
+      controlData.leftDir = 1;
+      controlData.rightDir = -1;
+    } else if(!buttonLeft.state&&buttonFwd.state&&buttonRev.state){   //if only left button is pressed, turn left on the spot
+      controlData.leftDir = -1;
+      controlData.rightDir = 1;
+    } 
+
+
     else {                                            // no input, stop
       controlData.leftDir = 0;
       controlData.rightDir = 0;
@@ -230,4 +238,3 @@ void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
     commsLossCount = 0;                               // reset communication loss counter
   }
 }
-
