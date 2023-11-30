@@ -62,10 +62,12 @@ const float kd = 0.8;                                 // derivative gain for PID
 //constants for sorting components
 const int cboomServo = 14;                            // GPIO pin for boom Servo. CHANGE TO CORRECT VALUE!!!
 const int cbucketServo = 27;                          // GPIO pin for bucket Servo. CHANGE TO CORRECT VALUE!!!
-const int cgateServo = 12;                            // GPIO pin for gate Servo. CHANGE TO CORRECT VALUE!!!
+const int cgateServo = 5;                             // GPIO pin for gate Servo. CHANGE TO CORRECT VALUE!!!
+const int cscoopservo = 12;                           // GPIO pin for scoop servo
 const int cBoServoChannel = 5;                        // PWM channel used for Boom Servo
 const int cBuServoChannel = 6;                        // PWM channel used for Bucket Servo
-const int cGServoChannel = 3;                         // PWM channel used for Gate Servo      
+const int cGServoChannel = 7;                         // PWM channel used for Gate Servo   
+const int cSServoChannel = 4;                         // PWM channel used for scoop servo   
 
 const int cTCSLED = 23;                               // GPIO pin for LED on TCS34725
 
@@ -84,6 +86,7 @@ DriveDataPacket driveData;                            // data packet to send con
 int i_boomVal = 0;                                    // desired servo angle for boom
 int i_bucketVal = 0;                                  // desired servo angle for bucket
 int i_gateVal;                                        // desired servo angle for gate
+int i_scoopVal;                                       // desired servo angle for scoop 
 
 int pickupState = 0;                                  // current state of the sorting loop
 int wait;                                             // delay used for sorting loop
@@ -110,9 +113,11 @@ void setup() {
   ledcAttachPin(cboomServo, cBoServoChannel);         // assign boom servo pin to servo channel
   ledcAttachPin(cbucketServo, cBuServoChannel);       // assign bucket servo pin to servo channel
   ledcAttachPin(cgateServo, cGServoChannel);          // assign gate servo pin to servo channel
+  ledcAttachPin(cscoopservo, cSServoChannel);         // assign scoop servo pin to servo channel
   ledcSetup(cBoServoChannel, 50, 16);                 // setup channel for 50Hz and 16-bit resolution
   ledcSetup(cBuServoChannel, 50, 16);                 // setup channel for 50Hz and 16-bit resolution
   ledcSetup(cGServoChannel, 50, 16);                  // setup channel for 50Hz and 16-bit resolution
+  ledcSetup(cSServoChannel, 50, 16);                  // setup channel for 50hz and 16-bit resolution
   pinMode(cTCSLED, OUTPUT);                           // configure GPIO for control of LED on TCS34725
 
 
@@ -183,6 +188,7 @@ void loop() {
   float u[] = {0, 0};                                 // PID control signal
   int pwm[] = {0, 0};                                 // motor speed(s), represented in bit resolution
   int dir[] = {1, 1};                                 // direction that motor should turn
+  int gateWait = 0;
 
   // if too many sequential packets have dropped, assume loss of controller, restart as safety measure
   if (commsLossCount > cMaxDroppedPackets) {
@@ -195,11 +201,12 @@ void loop() {
   if(tcsFlag){                                        // if colour sensor initialized
     tcs.getRawData(&r, &g, &b, &c);                   // get raw RGBC values
 
-    Serial.printf("R: %d, G: %d, B: %d, C: %d\n", r, g, b, c);
+    Serial.printf("R: %d, G: %d, B: %d, C: %d good?: %d\n", r, g, b, c, good);
+    //Serial.printf(" Boom: %d, Bucket: %d, Scoop: %d, Gate: %d, good?: %d Pickup state: %d\n", i_boomVal, i_bucketVal, i_scoopVal, i_gateVal, good, pickupState);
 
   }
 
-   if((r==3) && (g>=3&&g<=4) && (b>=0&&b<=2)&&(c>=5&&c<=15)){                  // colour is set to the small green rocks
+   if((r>=0&&r<=8) && (g>=0&&g<=4) && (b>=0&&b<=4)){                  // colour is set to the small green rocks
      good = HIGH;                          // boolean value is true
    }
    else{
@@ -221,51 +228,65 @@ void loop() {
     deltaT = ((float) (curTime - lastTime)) / 1.0e6;  // compute actual time interval in seconds
     lastTime = curTime;                               // update start time for next control cycle
     driveData.time = curTime;                         // update transmission time
-    
+  
+  if(inData.dump){
+    i_gateVal = 0;
+    //good = !good;
+  } else {
+    i_gateVal=45;
+  }
+
+
   if(inData.pickup){                                  // if the sorting button is pressed on the controller
     pickupState = 1;                                  // start the pickup sequence
   }  
         if(pickupState==0){                           // if the pickup sequence is not active, hold the servos in place
-          i_bucketVal = 88;
+          i_bucketVal = 98;
           i_boomVal = 180;
+          i_scoopVal = 90;
+          wait = 0;
         }
           
        if(pickupState==1){                            // if sorting sequence is at stage 1, raise boom slightly to move object towards colour sensor
-          if(i_boomVal>120){                          // if the boom position is greater than the desired position, move the boom until it reaches the desired position
-            i_boomVal--;
+           if(i_scoopVal>0){
+            i_scoopVal=i_scoopVal-2;   
+          }
+          if(wait > 100){
+            if(i_boomVal>120){                          // if the boom position is greater than the desired position, move the boom until it reaches the desired position
+              i_boomVal--;
+            } else if(i_boomVal<=120&&i_scoopVal<=0) {
+              wait = 0;                                 // reset the delay variable
+             pickupState = 2;                          // change to next pickup state
+            }
           } else {
-            wait = 0;                                 // set the delay variable to 0
-            pickupState = 2;                          // change to next pickup state
+            wait ++;
           }
        }
 
         if(pickupState==2){                           // wait 300 cycles to allow the colour sensor to read the value of the object
           wait++;
-          if(wait>300){
+          if(wait>150){
             if(good){                                 // if desired object, move to the next stage in the sorting sequence
               pickupState = 3;  
             } else {                                  // else, drop the object and reset the sorting sequence                      
-              if(i_bucketVal < 180) {
-                i_bucketVal++;
-              } else {
-                pickupState = 0;
-              }
+              pickupState = 5;
             } 
           }
         }
             
         if(pickupState==3){                          // move bucket and boom until its above the storage box
-          if(i_boomVal>-20){
-            i_boomVal--;
+          if(i_boomVal>4){
+            i_boomVal=i_boomVal-2;
           }
           if(i_bucketVal< 180){
-            i_bucketVal++;
+            i_bucketVal=i_bucketVal+2;
           }
-          if(i_boomVal <= -20 && i_bucketVal >= 180){
+          if(i_boomVal <= 4 && i_bucketVal >= 180){
             pickupState = 4;                        // switch to the next stage in the sorting sequence
           }
         }
           
+
         if(pickupState==4){                         // drop the object into the storage box
           if(i_bucketVal > 88){
             i_bucketVal--;
@@ -273,9 +294,20 @@ void loop() {
             pickupState = 0;                       // reset the sorting sequence
           }
         }
-    ledcWrite(cBoServoChannel, degreesToDutyCycle(i_boomVal));    //setting the position of the boom
-    ledcWrite(cBuServoChannel, degreesToDutyCycle(i_bucketVal));  // setting the position of the bucket
 
+        if(pickupState==5){
+          if(i_bucketVal < 190) {
+                i_bucketVal++;
+          } if(i_scoopVal < 90){
+                i_scoopVal++;
+          }else if(i_bucketVal>=190&&i_scoopVal>=90) {
+                pickupState = 0;
+          }
+        }
+    ledcWrite(cBoServoChannel, degreesToDutyCycle(i_boomVal));    // setting the position of the boom
+    ledcWrite(cBuServoChannel, degreesToDutyCycle(i_bucketVal));  // setting the position of the bucket
+    ledcWrite(cSServoChannel, degreesToDutyCycle(i_scoopVal));    // setting the position of the scoop
+    ledcWrite(cGServoChannel, degreesToDutyCycle(i_gateVal));     // setting the position of the gate
 
     for (int k = 0; k < cNumMotors; k++) {
       velEncoder[k] = ((float) pos[k] - (float) lastEncoder[k]) / deltaT; // calculate velocity in counts/sec
